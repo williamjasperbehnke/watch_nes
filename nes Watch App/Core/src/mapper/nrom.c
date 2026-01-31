@@ -1,6 +1,6 @@
-#include "../include/mapper_nrom.h"
+#include "../../include/mapper/nrom.h"
 
-int mapper_nrom_cpu_map(const MapperNROM *mapper, uint16_t addr) {
+int nrom_cpu_map(const MapperNROM *mapper, uint16_t addr) {
     if (addr < 0x8000) {
         return -1;
     }
@@ -10,7 +10,7 @@ int mapper_nrom_cpu_map(const MapperNROM *mapper, uint16_t addr) {
     return (int)(addr & 0x3FFF);
 }
 
-int mapper_nrom_ppu_map(const MapperNROM *mapper, uint16_t addr, bool write) {
+int nrom_ppu_map(const MapperNROM *mapper, uint16_t addr, bool write) {
     if (addr >= 0x2000) {
         return -1;
     }

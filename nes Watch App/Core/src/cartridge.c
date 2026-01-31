@@ -66,44 +66,157 @@ bool cartridge_load(Cartridge *cart, const uint8_t *data, size_t size) {
         cart->hasChrRam = true;
     }
 
-    if (cart->mapperID != 0) {
+    if (cart->mapperID == 0) {
+        cart->mapperType = MAPPER_NROM;
+        cart->mapperNrom.prgBanks = prgBanks;
+        cart->mapperNrom.chrBanks = chrBanks;
+    } else if (cart->mapperID == 1) {
+        cart->mapperType = MAPPER_MMC1;
+        mmc1_init(&cart->mapperMmc1);
+    } else {
         return false;
     }
-
-    cart->mapper.prgBanks = prgBanks;
-    cart->mapper.chrBanks = chrBanks;
     return true;
 }
 
 bool cartridge_cpu_read(const Cartridge *cart, uint16_t addr, uint8_t *out) {
-    int mapped = mapper_nrom_cpu_map(&cart->mapper, addr);
-    if (mapped < 0) {
-        return false;
+    if (cart->mapperType == MAPPER_NROM) {
+        int mapped = nrom_cpu_map(&cart->mapperNrom, addr);
+        if (mapped < 0) {
+            return false;
+        }
+        *out = cart->prgROM[mapped];
+        return true;
     }
-    *out = cart->prgROM[mapped];
-    return true;
+    if (cart->mapperType == MAPPER_MMC1) {
+        if (addr < 0x8000) {
+            return false;
+        }
+        uint8_t prgMode = (cart->mapperMmc1.control >> 2) & 0x03;
+        int prgBankCount = (int)(cart->prgSize / (16 * 1024));
+        int bank = cart->mapperMmc1.prgBank & 0x0F;
+        uint32_t mapped = 0;
+
+        switch (prgMode) {
+            case 0:
+            case 1: {
+                int bank32 = (bank & 0x0E);
+                if (addr < 0xC000) {
+                    mapped = (uint32_t)bank32 * 16 * 1024 + (addr - 0x8000);
+                } else {
+                    mapped = (uint32_t)(bank32 + 1) * 16 * 1024 + (addr - 0xC000);
+                }
+                break;
+            }
+            case 2: {
+                if (addr < 0xC000) {
+                    mapped = (uint32_t)(0 * 16 * 1024 + (addr - 0x8000));
+                } else {
+                    int b = bank % prgBankCount;
+                    mapped = (uint32_t)b * 16 * 1024 + (addr - 0xC000);
+                }
+                break;
+            }
+            case 3:
+            default: {
+                if (addr < 0xC000) {
+                    int b = bank % prgBankCount;
+                    mapped = (uint32_t)b * 16 * 1024 + (addr - 0x8000);
+                } else {
+                    mapped = (uint32_t)(prgBankCount - 1) * 16 * 1024 + (addr - 0xC000);
+                }
+                break;
+            }
+        }
+
+        if (mapped >= cart->prgSize) {
+            return false;
+        }
+        *out = cart->prgROM[mapped];
+        return true;
+    }
+    return false;
 }
 
 bool cartridge_cpu_write(const Cartridge *cart, uint16_t addr) {
-    int mapped = mapper_nrom_cpu_map(&cart->mapper, addr);
-    return mapped >= 0;
+    if (cart->mapperType == MAPPER_NROM) {
+        int mapped = nrom_cpu_map(&cart->mapperNrom, addr);
+        return mapped >= 0;
+    }
+    if (cart->mapperType == MAPPER_MMC1) {
+        return addr >= 0x8000;
+    }
+    return false;
 }
 
 bool cartridge_ppu_read(const Cartridge *cart, uint16_t addr, uint8_t *out) {
-    int mapped = mapper_nrom_ppu_map(&cart->mapper, addr, false);
-    if (mapped < 0) {
-        return false;
+    if (cart->mapperType == MAPPER_NROM) {
+        int mapped = nrom_ppu_map(&cart->mapperNrom, addr, false);
+        if (mapped < 0) {
+            return false;
+        }
+        *out = cart->chrROM[mapped];
+        return true;
     }
-    *out = cart->chrROM[mapped];
-    return true;
+    if (cart->mapperType == MAPPER_MMC1) {
+        if (addr >= 0x2000) {
+            return false;
+        }
+        uint8_t chrMode = (cart->mapperMmc1.control >> 4) & 0x01;
+        uint32_t mapped = 0;
+        if (chrMode == 0) {
+            uint32_t bank = (uint32_t)(cart->mapperMmc1.chrBank0 & 0x1E);
+            mapped = bank * 4 * 1024 + addr;
+        } else {
+            if (addr < 0x1000) {
+                mapped = (uint32_t)cart->mapperMmc1.chrBank0 * 4 * 1024 + addr;
+            } else {
+                mapped = (uint32_t)cart->mapperMmc1.chrBank1 * 4 * 1024 + (addr - 0x1000);
+            }
+        }
+        if (mapped >= cart->chrSize) {
+            return false;
+        }
+        *out = cart->chrROM[mapped];
+        return true;
+    }
+    return false;
 }
 
 bool cartridge_ppu_write(Cartridge *cart, uint16_t addr, uint8_t data) {
-    int mapped = mapper_nrom_ppu_map(&cart->mapper, addr, true);
-    if (mapped < 0) {
+    if (cart->mapperType == MAPPER_NROM) {
+        int mapped = nrom_ppu_map(&cart->mapperNrom, addr, true);
+        if (mapped < 0) {
+            return false;
+        }
+        if (cart->hasChrRam) {
+            cart->chrROM[mapped] = data;
+            return true;
+        }
         return false;
     }
-    if (cart->hasChrRam) {
+    if (cart->mapperType == MAPPER_MMC1) {
+        if (!cart->hasChrRam) {
+            return false;
+        }
+        if (addr >= 0x2000) {
+            return false;
+        }
+        uint8_t chrMode = (cart->mapperMmc1.control >> 4) & 0x01;
+        uint32_t mapped = 0;
+        if (chrMode == 0) {
+            uint32_t bank = (uint32_t)(cart->mapperMmc1.chrBank0 & 0x1E);
+            mapped = bank * 4 * 1024 + addr;
+        } else {
+            if (addr < 0x1000) {
+                mapped = (uint32_t)cart->mapperMmc1.chrBank0 * 4 * 1024 + addr;
+            } else {
+                mapped = (uint32_t)cart->mapperMmc1.chrBank1 * 4 * 1024 + (addr - 0x1000);
+            }
+        }
+        if (mapped >= cart->chrSize) {
+            return false;
+        }
         cart->chrROM[mapped] = data;
         return true;
     }

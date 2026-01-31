@@ -16,7 +16,8 @@ static void ppu_write_memory(PPU *ppu, uint16_t addr, uint8_t data);
 
 static int ppu_mirror_nametable(PPU *ppu, uint16_t addr) {
     int offset = (int)(addr & 0x0FFF);
-    if (ppu->mirroring == MIRROR_VERTICAL) {
+    Mirroring mirroring = ppu->cartridge ? ppu->cartridge->mirroring : ppu->mirroring;
+    if (mirroring == MIRROR_VERTICAL) {
         return offset & 0x07FF;
     }
     int table = (offset / 0x400) & 0x03;

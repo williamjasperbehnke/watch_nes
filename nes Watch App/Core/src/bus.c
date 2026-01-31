@@ -92,6 +92,37 @@ void bus_cpu_write(Bus *bus, uint16_t addr, uint8_t data) {
     bus->dataBus = data;
 
     if (bus->cartridge && cartridge_cpu_write(bus->cartridge, addr)) {
+        if (bus->cartridge->mapperType == MAPPER_MMC1 && addr >= 0x8000) {
+            if (data & 0x80) {
+                mmc1_reset(&bus->cartridge->mapperMmc1);
+                bus->cartridge->mapperMmc1.control |= 0x0C;
+            } else {
+                MapperMMC1 *m = &bus->cartridge->mapperMmc1;
+                m->shiftReg = (uint8_t)((m->shiftReg >> 1) | ((data & 0x01) << 4));
+                m->shiftCount += 1;
+                if (m->shiftCount == 5) {
+                    uint8_t value = m->shiftReg;
+                    uint16_t region = (addr >> 13) & 0x03;
+                    if (region == 0) {
+                        m->control = value;
+                        uint8_t mirror = value & 0x03;
+                        if (mirror == 3) {
+                            bus->cartridge->mirroring = MIRROR_HORIZONTAL;
+                        } else {
+                            bus->cartridge->mirroring = MIRROR_VERTICAL;
+                        }
+                    } else if (region == 1) {
+                        m->chrBank0 = value;
+                    } else if (region == 2) {
+                        m->chrBank1 = value;
+                    } else {
+                        m->prgBank = value;
+                    }
+                    m->shiftReg = 0x10;
+                    m->shiftCount = 0;
+                }
+            }
+        }
         return;
     }
 

@@ -1,7 +1,13 @@
 #ifndef NESC_CARTRIDGE_H
 #define NESC_CARTRIDGE_H
 
-#include "mapper_nrom.h"
+#include "mmc1.h"
+#include "nrom.h"
+
+typedef enum {
+    MAPPER_NROM = 0,
+    MAPPER_MMC1 = 1
+} MapperType;
 
 typedef struct {
     uint8_t *prgROM;
@@ -11,7 +17,9 @@ typedef struct {
     uint8_t mapperID;
     Mirroring mirroring;
     bool hasChrRam;
-    MapperNROM mapper;
+    MapperNROM mapperNrom;
+    MapperMMC1 mapperMmc1;
+    MapperType mapperType;
 } Cartridge;
 
 void cartridge_free(Cartridge *cart);
