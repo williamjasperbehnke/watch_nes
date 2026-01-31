@@ -5,12 +5,65 @@
 //  Created by William Behnke on 2026-01-29.
 //
 
+import AVFoundation
+import AVKit
 import SwiftUI
 
 struct ContentView: View {
     @StateObject private var viewModel = EmulatorViewModel()
+    @State private var selectedIndex: Int = 0
+    @State private var crownValue: Double = 0
+    @State private var showingMenu: Bool = true
+    @State private var timeHider = AVPlayer()
 
     var body: some View {
+        ZStack {
+            VideoPlayer(player: timeHider)
+                .frame(width: 0, height: 0)
+                .opacity(0.01)
+            if showingMenu {
+                CartridgeMenuView(
+                    romNames: viewModel.romNames,
+                    selectedIndex: $selectedIndex,
+                    crownValue: $crownValue
+                ) { romName in
+                    viewModel.stop()
+                    viewModel.loadRom(named: romName)
+                    viewModel.start()
+                    showingMenu = false
+                }
+            } else {
+                emulatorView
+                    .overlay(alignment: .top) {
+                        Button("Menu") {
+                            viewModel.stop()
+                            showingMenu = true
+                        }
+                        .buttonStyle(.plain)
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Color.gray.opacity(0.7))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .padding(.top, 0)
+                    }
+            }
+        }
+        .ignoresSafeArea()
+        .onAppear {
+            timeHider.play()
+            if viewModel.romNames.isEmpty {
+                viewModel.loadDefaultRom()
+                viewModel.start()
+                showingMenu = false
+            } else {
+                selectedIndex = min(selectedIndex, viewModel.romNames.count - 1)
+                crownValue = Double(selectedIndex)
+            }
+        }
+    }
+
+    private var emulatorView: some View {
         GeometryReader { proxy in
             ZStack {
                 if let frameImage = viewModel.frameImage {
@@ -69,11 +122,6 @@ struct ContentView: View {
                 }
                 .padding(6)
             }
-        }
-        .ignoresSafeArea()
-        .onAppear {
-            viewModel.loadDefaultRom()
-            viewModel.start()
         }
     }
 }

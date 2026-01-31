@@ -5,15 +5,30 @@ import SwiftUI
 final class EmulatorViewModel: ObservableObject {
     @Published var frameImage: CGImage?
     @Published var status: String = "Idle"
+    @Published private(set) var romNames: [String] = []
 
     private let core = EmulatorCore()
     private var timer: DispatchSourceTimer?
     private let emuQueue = DispatchQueue(label: "nes.emulator.queue", qos: .userInitiated)
     private var audioEngine: CAudioEngine?
 
+    init() {
+        romNames = Self.discoverRoms()
+    }
+
     func loadDefaultRom() {
+        guard let first = romNames.first else {
+            status = "Missing .nes file in app bundle."
+            return
+        }
+        loadRom(named: first)
+    }
+
+    func loadRom(named name: String) {
         DispatchQueue.global(qos: .userInitiated).async {
-            guard let url = Bundle.main.url(forResource: "DigDug", withExtension: "nes") else {
+            let url = Bundle.main.url(forResource: name, withExtension: "nes", subdirectory: "Roms")
+                ?? Bundle.main.url(forResource: name, withExtension: "nes")
+            guard let url else {
                 DispatchQueue.main.async { self.status = "Missing .nes file in app bundle." }
                 return
             }
@@ -65,5 +80,26 @@ final class EmulatorViewModel: ObservableObject {
 
     func setButton(_ button: Controller.Button, pressed: Bool) {
         core.setButton(button, pressed: pressed)
+    }
+
+    private static func discoverRoms() -> [String] {
+        var urls: [URL] = []
+        if let roms = Bundle.main.urls(forResourcesWithExtension: "nes", subdirectory: "Roms") {
+            urls.append(contentsOf: roms)
+        }
+        if let root = Bundle.main.urls(forResourcesWithExtension: "nes", subdirectory: nil) {
+            urls.append(contentsOf: root)
+        }
+        if urls.isEmpty, let resourceURL = Bundle.main.resourceURL {
+            if let enumerator = FileManager.default.enumerator(at: resourceURL, includingPropertiesForKeys: nil) {
+                for case let fileURL as URL in enumerator {
+                    if fileURL.pathExtension.lowercased() == "nes" {
+                        urls.append(fileURL)
+                    }
+                }
+            }
+        }
+        let names = urls.map { $0.deletingPathExtension().lastPathComponent }
+        return Array(Set(names)).sorted()
     }
 }
