@@ -2,6 +2,8 @@
 
 NES emulator for watchOS with a SwiftUI front end and a C++ core.
 
+https://youtube.com/shorts/lWY7RMkrnCU
+
 ## Overview
 This project runs classic NES ROMs on Apple Watch. The core is written in C++ for performance and portability, while the UI and system integration use SwiftUI. ROMs are bundled in the app and selected with the Digital Crown. Rendering is scanline-based and presented as a CGImage each frame.
 
