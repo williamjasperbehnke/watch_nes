@@ -1,7 +1,8 @@
 #ifndef NESC_CPU_H
 #define NESC_CPU_H
 
-#include "bus.h"
+#include "bus.hpp"
+#include <string.h>
 
 typedef enum {
     CPU_FLAG_C = 0x01,
@@ -36,9 +37,9 @@ typedef enum {
     ACCESS_IMPLIED
 } AccessKind;
 
-struct CPU;
+class CPU;
 
-typedef uint8_t (*cpu_op)(struct CPU *cpu);
+typedef uint8_t (*cpu_op)(class CPU *cpu);
 
 typedef struct {
     const char *name;
@@ -49,7 +50,8 @@ typedef struct {
     uint8_t cycles;
 } Instruction;
 
-typedef struct CPU {
+class CPU {
+public:
     Bus *bus;
     uint8_t a;
     uint8_t x;
@@ -64,12 +66,25 @@ typedef struct CPU {
     uint8_t baseHigh;
     int cycleCounter;
     Instruction instructions[256];
-} CPU;
 
-void cpu_init(CPU *cpu);
-void cpu_reset(CPU *cpu);
-void cpu_irq(CPU *cpu);
-void cpu_nmi(CPU *cpu);
-int cpu_step(CPU *cpu);
+    CPU() {
+        memset(this, 0, sizeof(CPU));
+    }
+
+    void init();
+    void reset();
+    void irq();
+    void nmi();
+    int step();
+    uint8_t read(uint16_t addr);
+    void write(uint16_t addr, uint8_t data);
+    void push(uint8_t value);
+    uint8_t pop();
+    uint8_t getFlag(CPUFlag flag);
+    void setFlag(CPUFlag flag, bool value);
+    void setZN(uint8_t value);
+    uint8_t fetch();
+    void impliedDummyRead();
+};
 
 #endif

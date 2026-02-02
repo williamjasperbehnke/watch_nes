@@ -1,13 +1,13 @@
 #ifndef NESC_H
 #define NESC_H
 
-#include "types.h"
+#include "types.hpp"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef struct NES NES;
+class NES;
 typedef NES *NESRef;
 
 NESRef nes_create(void);
